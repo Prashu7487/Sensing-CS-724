@@ -1,0 +1,106 @@
+// Transmitter code
+
+#include <ESP8266WiFi.h>
+#include "espnow.h"
+// #include "WiFi.h"
+#include "Wire.h"
+#include <MPU6050_light.h>
+
+//Reciever MAC Address
+uint8_t peerMacAddress[] = {0x84, 0xf3, 0xeb, 0x18, 0x5b, 0x6b};
+
+//Struct to send data
+typedef struct{
+  bool f;
+  bool b;
+  bool l;
+  bool r;
+} message;
+message data;
+
+
+//Create an object of predefined class MPU6050 
+MPU6050 mpu(Wire);
+//Initialize global variables 
+unsigned long timer = 0;
+float x, y;
+bool front = false, back = false, left = false, right = false;
+
+
+void OnDataSent(uint8_t *mac_addr, uint8_t status) {
+  Serial.print("\r\nLast Packet Send Status:\t");
+  Serial.println(status == 0 ? "Delivery Success" : "Delivery Fail");
+}
+
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.mode(WIFI_STA);
+  
+//initialize esp-now
+  if (esp_now_init() != 0){
+    Serial.println("Error Initializing ESP NOW");
+    return;
+  }
+  Serial.println("setup_complete");
+  
+//Register callback function
+  esp_now_register_send_cb(OnDataSent);
+  //Add peer
+
+  if (esp_now_add_peer(peerMacAddress, ESP_NOW_ROLE_SLAVE, 0, NULL, 0) != 0) {
+    Serial.println("Failed to add peer");
+    return;
+  }
+  Serial.println("peer_added");
+
+  Wire.begin();
+  
+  byte status = mpu.begin();
+  Serial.println("MPU started"); 
+  Serial.print(F("MPU6050 status: "));
+  Serial.println(status);
+  while(status!=0){ } // stop everything if could not connect to MPU6050
+  
+  Serial.println(F("Calculating offsets, do not move MPU6050"));
+  delay(1000);
+  mpu.calcOffsets(); // gyro and accelero
+  Serial.println("Done!\n");
+}
+
+void loop() {
+  //get data from mpu6050
+  mpu.update();
+  if((millis()-timer)>10){ //get data every 10ms
+	x = mpu.getAngleX();
+	y = mpu.getAngleY();
+
+  //process data
+  if(x >= 30)
+    back = true;
+  else
+    back = false;
+  if(x <= -30)
+    front = true;
+  else
+    front = false;
+  if(y >= 30)
+    right = true;
+  else
+    right = false;
+  if(y <= -30)
+    left = true;
+  else
+    left = false;
+	timer = millis();  
+
+  data.f = front;
+  data.b = back;
+  data.l = left;
+  data.r = right;
+
+  //Send message
+  esp_now_send(peerMacAddress, (uint8_t *) &data, sizeof(data));
+
+  } 
+}

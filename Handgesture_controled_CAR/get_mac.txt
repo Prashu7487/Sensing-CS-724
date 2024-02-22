@@ -1,0 +1,16 @@
+/*
+Code for getting MAC address of ESP8266 Module
+*/
+
+#include<ESP8266WiFi.h>
+void setup() {
+  Serial.begin(9600);
+  delay(1000);
+  // Serial.println("Hello, World!");
+}
+
+void loop() {
+  // Your main code (if any) goes here
+  Serial.println("Hello");
+  Serial.println(WiFi.macAddress());
+}
